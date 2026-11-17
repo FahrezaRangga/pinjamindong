@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/alat.dart';
-import '../models/dummy_data.dart';
 import '../models/peminjaman.dart';
+import '../services/data_repository.dart';
+import '../widgets/state_view.dart';
 import '../widgets/status_badge.dart';
 
 class DatalogScreen extends StatefulWidget {
@@ -13,23 +14,45 @@ class DatalogScreen extends StatefulWidget {
 }
 
 class _DatalogScreenState extends State<DatalogScreen> {
+  late Future<(List<Peminjaman>, List<Alat>)> _future;
   String _filter = 'semua';
   final _format = DateFormat('dd MMM yyyy, HH:mm');
 
-  String _namaAlat(String kode) => dummyAlat
-      .firstWhere((a) => a.kode == kode,
-          orElse: () =>
-              Alat(kode: kode, nama: kode, stokTotal: 0, dipinjam: 0))
-      .nama;
+  @override
+  void initState() {
+    super.initState();
+    _future = _muat();
+  }
+
+  Future<(List<Peminjaman>, List<Alat>)> _muat() async {
+    final fPeminjaman = DataRepository.ambilPeminjaman();
+    final fAlat = DataRepository.ambilAlat();
+    final peminjaman = await fPeminjaman;
+    final alat = await fAlat;
+    return (peminjaman, alat);
+  }
+
+  void _muatUlang() => setState(() => _future = _muat());
+
+  Future<void> _tarikRefresh() async {
+    final f = _muat();
+    setState(() => _future = f);
+    try {
+      await f;
+    } catch (_) {
+      // error ditampilkan oleh FutureBuilder
+    }
+  }
+
+  String _namaAlat(List<Alat> alat, String kode) {
+    for (final a in alat) {
+      if (a.kode == kode) return a.nama;
+    }
+    return kode;
+  }
 
   @override
   Widget build(BuildContext context) {
-    final tampil = dummyPeminjaman.where((p) {
-      if (_filter == 'dipinjam') return !p.sudahDikembalikan;
-      if (_filter == 'dikembalikan') return p.sudahDikembalikan;
-      return true;
-    }).toList();
-
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 720),
@@ -57,14 +80,53 @@ class _DatalogScreenState extends State<DatalogScreen> {
               ),
             ),
             Expanded(
-              child: tampil.isEmpty
-                  ? const Center(child: Text('Belum ada data'))
-                  : ListView.separated(
+              child: RefreshIndicator(
+                onRefresh: _tarikRefresh,
+                child: FutureBuilder<(List<Peminjaman>, List<Alat>)>(
+                  future: _future,
+                  builder: (context, snap) {
+                    if (snap.connectionState != ConnectionState.done) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    if (snap.hasError) {
+                      return ScrollableCenter(
+                        child: StateView(
+                          ikon: Icons.cloud_off,
+                          judul: 'Gagal memuat data',
+                          pesan: 'Periksa koneksi internet, lalu coba lagi.',
+                          labelTombol: 'Coba lagi',
+                          onTombol: _muatUlang,
+                        ),
+                      );
+                    }
+                    final (peminjaman, alat) = snap.data!;
+                    final tampil = peminjaman.where((p) {
+                      if (_filter == 'dipinjam') return !p.sudahDikembalikan;
+                      if (_filter == 'dikembalikan') return p.sudahDikembalikan;
+                      return true;
+                    }).toList();
+
+                    if (tampil.isEmpty) {
+                      return ScrollableCenter(
+                        child: StateView(
+                          ikon: Icons.receipt_long_outlined,
+                          judul: peminjaman.isEmpty
+                              ? 'Belum ada peminjaman'
+                              : 'Tidak ada data untuk filter ini',
+                        ),
+                      );
+                    }
+                    return ListView.separated(
+                      physics: const AlwaysScrollableScrollPhysics(),
                       padding: const EdgeInsets.all(16),
                       itemCount: tampil.length,
                       separatorBuilder: (_, __) => const SizedBox(height: 12),
-                      itemBuilder: (_, i) => _kartu(tampil[i]),
-                    ),
+                      itemBuilder: (_, i) =>
+                          _kartu(tampil[i], _namaAlat(alat, tampil[i].kodeAlat)),
+                    );
+                  },
+                ),
+              ),
             ),
           ],
         ),
@@ -72,7 +134,10 @@ class _DatalogScreenState extends State<DatalogScreen> {
     );
   }
 
-  Widget _kartu(Peminjaman p) {
+  Widget _kartu(Peminjaman p, String namaAlat) {
+    final kode = p.kodePeminjam.length > 8
+        ? '${p.kodePeminjam.substring(0, 8)}…'
+        : p.kodePeminjam;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -83,7 +148,7 @@ class _DatalogScreenState extends State<DatalogScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Expanded(
-                  child: Text('${_namaAlat(p.kodeAlat)} × ${p.jumlah}',
+                  child: Text('$namaAlat × ${p.jumlah}',
                       style: const TextStyle(
                           fontWeight: FontWeight.w600, fontSize: 16)),
                 ),
@@ -93,7 +158,7 @@ class _DatalogScreenState extends State<DatalogScreen> {
               ],
             ),
             const SizedBox(height: 6),
-            Text('Kode alat: ${p.kodeAlat} · Peminjam: ${p.kodePeminjam.substring(0, 8)}…',
+            Text('Kode alat: ${p.kodeAlat} · Peminjam: $kode',
                 style: const TextStyle(fontSize: 12)),
             Text('Pinjam: ${_format.format(p.waktuPinjam)}',
                 style: const TextStyle(fontSize: 12)),

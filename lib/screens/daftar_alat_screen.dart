@@ -1,24 +1,84 @@
 import 'package:flutter/material.dart';
 import '../models/alat.dart';
-import '../models/dummy_data.dart';
+import '../services/data_repository.dart';
+import '../widgets/state_view.dart';
 import '../widgets/status_badge.dart';
 
-class DaftarAlatScreen extends StatelessWidget {
+class DaftarAlatScreen extends StatefulWidget {
   const DaftarAlatScreen({super.key});
 
   @override
+  State<DaftarAlatScreen> createState() => _DaftarAlatScreenState();
+}
+
+class _DaftarAlatScreenState extends State<DaftarAlatScreen> {
+  late Future<List<Alat>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = DataRepository.ambilAlat();
+  }
+
+  void _muatUlang() {
+    setState(() => _future = DataRepository.ambilAlat());
+  }
+
+  Future<void> _tarikRefresh() async {
+    final f = DataRepository.ambilAlat();
+    setState(() => _future = f);
+    try {
+      await f;
+    } catch (_) {
+      // error ditampilkan oleh FutureBuilder
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final data = dummyAlat; // nanti diganti data dari kontrak
-    return GridView.builder(
-      padding: const EdgeInsets.all(16),
-      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 380,
-        mainAxisExtent: 190,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
+    return RefreshIndicator(
+      onRefresh: _tarikRefresh,
+      child: FutureBuilder<List<Alat>>(
+        future: _future,
+        builder: (context, snap) {
+          if (snap.connectionState != ConnectionState.done) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snap.hasError) {
+            return ScrollableCenter(
+              child: StateView(
+                ikon: Icons.cloud_off,
+                judul: 'Gagal memuat data',
+                pesan: 'Periksa koneksi internet, lalu coba lagi.',
+                labelTombol: 'Coba lagi',
+                onTombol: _muatUlang,
+              ),
+            );
+          }
+          final data = snap.data!;
+          if (data.isEmpty) {
+            return const ScrollableCenter(
+              child: StateView(
+                ikon: Icons.inventory_2_outlined,
+                judul: 'Belum ada data alat',
+                pesan: 'Data alat belum didaftarkan ke sistem.',
+              ),
+            );
+          }
+          return GridView.builder(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(16),
+            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+              maxCrossAxisExtent: 380,
+              mainAxisExtent: 190,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+            ),
+            itemCount: data.length,
+            itemBuilder: (_, i) => _AlatCard(alat: data[i]),
+          );
+        },
       ),
-      itemCount: data.length,
-      itemBuilder: (_, i) => _AlatCard(alat: data[i]),
     );
   }
 }

@@ -1,7 +1,9 @@
+import 'package:flutter/material.dart';
+import 'beranda_screen.dart';
 import 'daftar_alat_screen.dart';
 import 'datalog_screen.dart';
-import 'package:flutter/material.dart';
-
+import 'form_pinjam_screen.dart';
+import 'tentang_screen.dart';
 
 class ShellScreen extends StatefulWidget {
   const ShellScreen({super.key});
@@ -22,14 +24,16 @@ class _ShellScreenState extends State<ShellScreen> {
     Icons.info,
   ];
 
-  // Sementara: placeholder. Diganti halaman asli satu per satu.
-     final List<Widget> _halaman = [
-    const Center(child: Text('Beranda')),
-    const DatalogScreen(),
-    const DaftarAlatScreen(),
-    const Center(child: Text('Form Pinjam')),
-    const Center(child: Text('Tentang')),
-  ];
+  void _pindah(int v) => setState(() => _i = v);
+
+  // Getter (bukan field) supaya bisa memakai _pindah
+  List<Widget> get _halaman => [
+        BerandaScreen(onPindah: _pindah),
+        const DatalogScreen(),
+        const DaftarAlatScreen(),
+        const FormPinjamScreen(),
+        const TentangScreen(),
+      ];
 
   @override
   Widget build(BuildContext context) {
@@ -41,7 +45,7 @@ class _ShellScreenState extends State<ShellScreen> {
           if (lebar)
             NavigationRail(
               selectedIndex: _i,
-              onDestinationSelected: (v) => setState(() => _i = v),
+              onDestinationSelected: _pindah,
               labelType: NavigationRailLabelType.all,
               destinations: [
                 for (var k = 0; k < 5; k++)
@@ -56,7 +60,7 @@ class _ShellScreenState extends State<ShellScreen> {
           ? null
           : NavigationBar(
               selectedIndex: _i,
-              onDestinationSelected: (v) => setState(() => _i = v),
+              onDestinationSelected: _pindah,
               destinations: [
                 for (var k = 0; k < 5; k++)
                   NavigationDestination(icon: Icon(_ikon[k]), label: _label[k]),
