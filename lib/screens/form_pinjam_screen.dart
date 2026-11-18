@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../models/dummy_data.dart';
+import '../models/alat.dart';
+import '../services/blockchain_service.dart';
+import '../services/data_repository.dart';
+import '../widgets/state_view.dart';
+import '../widgets/tx_status_dialog.dart';
 
 class FormPinjamScreen extends StatefulWidget {
   const FormPinjamScreen({super.key});
@@ -13,10 +17,20 @@ class _FormPinjamScreenState extends State<FormPinjamScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nama = TextEditingController();
   final _nim = TextEditingController();
+  late Future<List<Alat>> _future;
 
   // kode alat -> jumlah unit yang dipilih
   final Map<String, int> _pilihan = {};
+  // kode alat -> nama alat (untuk label di dialog)
+  final Map<String, String> _namaPerKode = {};
   String? _errorAlat;
+  bool _sibuk = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = DataRepository.ambilAlat();
+  }
 
   @override
   void dispose() {
@@ -25,23 +39,85 @@ class _FormPinjamScreenState extends State<FormPinjamScreen> {
     super.dispose();
   }
 
-  void _kirim() {
+  void _muatUlang() {
+    setState(() {
+      _pilihan.clear();
+      _future = DataRepository.ambilAlat();
+    });
+  }
+
+  Future<void> _kirim() async {
+    if (_sibuk) return;
     final formOk = _formKey.currentState!.validate();
     final alatOk = _pilihan.isNotEmpty;
     setState(() => _errorAlat = alatOk ? null : 'Pilih minimal satu alat');
     if (!formOk || !alatOk) return;
 
-    // Sementara hanya dicetak. Diganti transaksi blockchain di Tahap F.
-    debugPrint('Pinjam: nim=${_nim.text} alat=$_pilihan');
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Form valid (data dummy, belum dikirim)')),
+    final svc = BlockchainService.instance;
+    final nim = _nim.text;
+    final langkah = _pilihan.entries
+        .map((e) => TxLangkah(
+              '${_namaPerKode[e.key] ?? e.key} × ${e.value}',
+              () => svc.pinjamAlat(e.key, nim, e.value),
+            ))
+        .toList();
+
+    setState(() => _sibuk = true);
+    final ok = await jalankanTransaksi(
+      context,
+      judul: 'Mencatat peminjaman',
+      langkah: langkah,
     );
+    if (!mounted) return;
+    setState(() => _sibuk = false);
+
+    if (ok) {
+      _nama.clear();
+      _nim.clear();
+    }
+    // Muat ulang stok, juga saat gagal (bisa jadi sebagian transaksi sukses)
+    _muatUlang();
   }
 
   @override
   Widget build(BuildContext context) {
-    final alatTersedia = dummyAlat.where((a) => a.tersedia > 0).toList();
+    return FutureBuilder<List<Alat>>(
+      future: _future,
+      builder: (context, snap) {
+        if (snap.connectionState != ConnectionState.done) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snap.hasError) {
+          return Center(
+            child: StateView(
+              ikon: Icons.cloud_off,
+              judul: 'Gagal memuat data alat',
+              pesan: 'Periksa koneksi internet, lalu coba lagi.',
+              labelTombol: 'Coba lagi',
+              onTombol: _muatUlang,
+            ),
+          );
+        }
+        final semua = snap.data!;
+        for (final a in semua) {
+          _namaPerKode[a.kode] = a.nama;
+        }
+        final alatTersedia = semua.where((a) => a.tersedia > 0).toList();
+        if (alatTersedia.isEmpty) {
+          return const Center(
+            child: StateView(
+              ikon: Icons.inventory_2_outlined,
+              judul: 'Tidak ada alat yang tersedia',
+              pesan: 'Semua alat sedang dipinjam atau belum didaftarkan.',
+            ),
+          );
+        }
+        return _formulir(alatTersedia);
+      },
+    );
+  }
 
+  Widget _formulir(List<Alat> alatTersedia) {
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 600),
@@ -74,7 +150,8 @@ class _FormPinjamScreenState extends State<FormPinjamScreen> {
               const Text('Pilih alat dan jumlah unit',
                   style: TextStyle(fontWeight: FontWeight.w600)),
               const SizedBox(height: 4),
-              for (final a in alatTersedia) _barisAlat(a.kode, a.nama, a.tersedia),
+              for (final a in alatTersedia)
+                _barisAlat(a.kode, a.nama, a.tersedia),
               if (_errorAlat != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 4),
@@ -90,12 +167,20 @@ class _FormPinjamScreenState extends State<FormPinjamScreen> {
                     hintText: 'Otomatis saat dikirim',
                     border: OutlineInputBorder()),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 8),
+              const Text(
+                'NIM di-hash sebelum dikirim, nama tidak disimpan di blockchain. '
+                'Setiap alat dikirim sebagai satu transaksi dan memakai biaya gas.',
+                style: TextStyle(fontSize: 12),
+              ),
+              const SizedBox(height: 16),
               SizedBox(
                 height: 48,
                 child: FilledButton(
-                  onPressed: _kirim,
-                  child: const Text('Konfirmasi & Catat On-Chain'),
+                  onPressed: _sibuk ? null : _kirim,
+                  child: Text(_sibuk
+                      ? 'Memproses…'
+                      : 'Konfirmasi & Catat On-Chain'),
                 ),
               ),
             ],

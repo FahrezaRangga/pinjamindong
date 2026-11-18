@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart';
 import 'package:wallet/wallet.dart';
@@ -12,6 +14,7 @@ class BlockchainService {
 
   Web3Client? _client;
   DeployedContract? _contract;
+  EthPrivateKey? _cred;
 
   // Menyiapkan koneksi sekali saja, dipakai ulang oleh semua halaman
   Future<void> _siap() async {
@@ -25,6 +28,25 @@ class BlockchainService {
     );
   }
 
+  EthPrivateKey get _kredensial {
+    final kunci = AppConfig.privateKey.trim();
+    if (kunci.isEmpty) throw Exception('PRIVATE_KEY belum diisi');
+    return _cred ??= EthPrivateKey.fromHex(kunci);
+  }
+
+  int _int(Object? v) => (v as BigInt).toInt();
+
+  // Waktu di kontrak dalam DETIK, Dart butuh milidetik
+  DateTime _waktu(int detik) =>
+      DateTime.fromMillisecondsSinceEpoch(detik * 1000);
+
+  // NIM di-hash + salt. NIM asli tidak pernah dikirim ke blockchain.
+  static String hashNim(String nim) => sha256
+      .convert(utf8.encode('${AppConfig.hashSalt}:${nim.trim()}'))
+      .toString()
+      .substring(0, 16);
+
+  // ---------- BACA (gratis) ----------
   Future<List> _baca(String fn, [List params = const []]) async {
     await _siap();
     return _client!.call(
@@ -34,13 +56,6 @@ class BlockchainService {
     );
   }
 
-  int _int(Object? v) => (v as BigInt).toInt();
-
-  // Waktu di kontrak dalam DETIK, Dart butuh milidetik
-  DateTime _waktu(int detik) =>
-      DateTime.fromMillisecondsSinceEpoch(detik * 1000);
-
-  // ---------- Alat ----------
   Future<List<Alat>> semuaAlat() async {
     final n = _int((await _baca('jumlahJenisAlat')).first);
     final tugas = <Future<Alat>>[];
@@ -60,7 +75,6 @@ class BlockchainService {
     );
   }
 
-  // ---------- Peminjaman ----------
   Future<List<Peminjaman>> semuaPeminjaman() async {
     final n = _int((await _baca('jumlahPeminjaman')).first);
     final tugas = <Future<Peminjaman>>[];
@@ -84,5 +98,36 @@ class BlockchainService {
       sudahDikembalikan: r[5] as bool,
       pencatat: r[6].toString(),
     );
+  }
+
+  // ---------- TULIS (membayar gas) ----------
+  Future<String> _kirim(String fn, List params) async {
+    await _siap();
+    return _client!.sendTransaction(
+      _kredensial,
+      Transaction.callContract(
+        contract: _contract!,
+        function: _contract!.function(fn),
+        parameters: params,
+      ),
+      chainId: AppConfig.chainId,
+    ); // mengembalikan hash transaksi
+  }
+
+  Future<String> pinjamAlat(String kodeAlat, String nim, int jumlah) =>
+      _kirim('pinjamAlat', [kodeAlat, hashNim(nim), BigInt.from(jumlah)]);
+
+  Future<String> kembalikanAlat(int id) =>
+      _kirim('kembalikanAlat', [BigInt.from(id)]);
+
+  // Menunggu transaksi masuk blok. true = sukses, false = ditolak kontrak.
+  Future<bool> tungguReceipt(String txHash) async {
+    await _siap();
+    for (var i = 0; i < 40; i++) {
+      final r = await _client!.getTransactionReceipt(txHash);
+      if (r != null) return r.status ?? false;
+      await Future.delayed(const Duration(seconds: 3));
+    }
+    throw Exception('Timeout menunggu transaksi');
   }
 }

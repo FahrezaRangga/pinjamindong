@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/alat.dart';
 import '../models/peminjaman.dart';
+import '../services/blockchain_service.dart';
 import '../services/data_repository.dart';
 import '../widgets/state_view.dart';
 import '../widgets/status_badge.dart';
+import '../widgets/tx_status_dialog.dart';
 
 class DatalogScreen extends StatefulWidget {
   const DatalogScreen({super.key});
@@ -16,6 +18,7 @@ class DatalogScreen extends StatefulWidget {
 class _DatalogScreenState extends State<DatalogScreen> {
   late Future<(List<Peminjaman>, List<Alat>)> _future;
   String _filter = 'semua';
+  bool _sibuk = false;
   final _format = DateFormat('dd MMM yyyy, HH:mm');
 
   @override
@@ -49,6 +52,40 @@ class _DatalogScreenState extends State<DatalogScreen> {
       if (a.kode == kode) return a.nama;
     }
     return kode;
+  }
+
+  Future<void> _kembalikan(Peminjaman p, String namaAlat) async {
+    if (_sibuk) return;
+    final yakin = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Kembalikan alat?'),
+        content: Text(
+            '$namaAlat × ${p.jumlah}\n\nTindakan ini dicatat di blockchain dan memakai biaya gas.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Batal')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Kembalikan')),
+        ],
+      ),
+    );
+    if (yakin != true || !mounted) return;
+
+    setState(() => _sibuk = true);
+    await jalankanTransaksi(
+      context,
+      judul: 'Mengembalikan alat',
+      langkah: [
+        TxLangkah('$namaAlat × ${p.jumlah}',
+            () => BlockchainService.instance.kembalikanAlat(p.id)),
+      ],
+    );
+    if (!mounted) return;
+    setState(() => _sibuk = false);
+    _muatUlang();
   }
 
   @override
@@ -170,7 +207,7 @@ class _DatalogScreenState extends State<DatalogScreen> {
               Align(
                 alignment: Alignment.centerRight,
                 child: FilledButton(
-                  onPressed: () => debugPrint('Kembalikan id ${p.id}'),
+                  onPressed: _sibuk ? null : () => _kembalikan(p, namaAlat),
                   child: const Text('Kembalikan'),
                 ),
               ),
