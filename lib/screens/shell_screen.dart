@@ -30,7 +30,7 @@ class _ShellScreenState extends State<ShellScreen> {
   List<Widget> get _halaman => [
         BerandaScreen(onPindah: _pindah),
         const DatalogScreen(),
-        const DaftarAlatScreen(),
+        DaftarAlatScreen(onPinjam: () => _pindah(3)),
         const FormPinjamScreen(),
         const TentangScreen(),
       ];

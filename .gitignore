@@ -49,3 +49,5 @@ app.*.map.json
 
 assets/config.env
 .env
+android/build/
+*.apk

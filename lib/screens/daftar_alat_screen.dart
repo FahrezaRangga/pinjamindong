@@ -5,7 +5,9 @@ import '../widgets/state_view.dart';
 import '../widgets/status_badge.dart';
 
 class DaftarAlatScreen extends StatefulWidget {
-  const DaftarAlatScreen({super.key});
+  // Dipanggil saat tombol Pinjam di kartu ditekan
+  final VoidCallback onPinjam;
+  const DaftarAlatScreen({super.key, required this.onPinjam});
 
   @override
   State<DaftarAlatScreen> createState() => _DaftarAlatScreenState();
@@ -75,20 +77,14 @@ class _DaftarAlatScreenState extends State<DaftarAlatScreen> {
               mainAxisSpacing: 12,
             ),
             itemCount: data.length,
-            itemBuilder: (_, i) => _AlatCard(alat: data[i]),
+            itemBuilder: (_, i) => _kartu(data[i]),
           );
         },
       ),
     );
   }
-}
 
-class _AlatCard extends StatelessWidget {
-  final Alat alat;
-  const _AlatCard({required this.alat});
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _kartu(Alat alat) {
     final habis = alat.tersedia == 0;
     return Card(
       child: Padding(
@@ -127,7 +123,7 @@ class _AlatCard extends StatelessWidget {
                         warnaTeks: Colors.green.shade900,
                         warnaLatar: Colors.green.shade100),
                 FilledButton(
-                  onPressed: habis ? null : () {},
+                  onPressed: habis ? null : widget.onPinjam,
                   child: const Text('Pinjam'),
                 ),
               ],
