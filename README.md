@@ -4,8 +4,8 @@ Logbook peminjaman alat Lab IoT berbasis blockchain. Data peminjaman disimpan di
 
 Proyek kelompok mata kuliah Pemrograman Mobile 2, D4 Teknologi Rekayasa Komputer, Politeknik Negeri Samarinda.
 
-- Kelompok: [ISI NAMA KELOMPOK]
-- Anggota: [Anggota 1], [Anggota 2], [Anggota 3]
+- Kelompok: [KELOMPOK_4]
+- Anggota: [], [MUHAMMAD_FAHREZA_CATUR_RANGGA_246661010]
 
 ## Fitur
 
@@ -113,12 +113,11 @@ assets/
 |---|---|
 | Anggota 1 | Rancangan dan kode smart contract, pengujian, deploy ke Sepolia, verifikasi Etherscan, data alat awal |
 | Anggota 2 | Rancangan UI, kode Flutter, integrasi web3dart, fitur transaksi, pengujian bersama, APK, laporan, video demo |
-| Anggota 3 | [ISI] |
 
 ## Luaran
 
-- Repositori kode: [ISI LINK]
-- Video demo: [ISI LINK YOUTUBE UNLISTED/DRIVE]
+- Repositori kode: [https://github.com/FahrezaRangga/pinjamindong]
+- Video demo: [https://drive.google.com/drive/folders/1kt_Sdk7C1eExa8fpgxX6JLkhYH1-8vxw?usp=sharing]
 - APK dan laporan: dikumpulkan sebagai berkas terpisah sesuai ketentuan tugas
 
 ## Sumber dan bantuan AI
